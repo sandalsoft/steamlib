@@ -1,6 +1,7 @@
 var Evernote = require('evernote').Evernote
 var enml = require('enml-js')
 var log = require('winston')
+log.level = process.env['NODE_LOG_LEVEL'] || 'debug'
 
 const MAX_NOTES_RETURNED = 250
 
@@ -40,20 +41,21 @@ module.exports = {
     return new Promise(function (resolve, reject) {
       noteStore.getDefaultNotebook(function (err, defaultNotebook) {
         if (err) reject(err)
-
+        if (defaultNotebook === 'undefined' || defaultNotebook === null) reject(`Cannot get default Notebook`)
         // create a notebook object and populate it with data from Evernote
         var notebook = {}
-
-// GOT AS FAR AS HERE
+        // log.debug(`DefaultNotebook: ${JSON.stringify(defaultNotebook)}`)
         var filter = self._createNotesFilter(defaultNotebook.guid, null, null)
         var resultSpec = self._createResultSpec()
 
         self._getNotesInNotebook(authToken, isUsingSanbox, filter, 0, null, resultSpec)
         .then(notes => {
+          log.info(`there are ${notes.count} notes I've found!`)
           notebook.notes = notes
           resolve(notebook)
         })
         .catch(err => {
+          log.debug(`err caught in _getNotesInNotesbook:  ${err}`)
           reject(err)
         })
       })// noteStore.listNotebooks()
@@ -61,44 +63,94 @@ module.exports = {
   }, // getDefaultNotebook()
 
 // TODO: change this function name to something that makes more sense
+  /**
+   *  Fetches all notes in the Notenbook specified by the GUID of the notebookGuid property of the filter.
+   *  The Evernote SDK flow is lame, this corrects that.  Given a Notebook GUID, create a filter that
+   *  doesn't filter anything, it gets the metdata for all notes associated with that notebook.  Then we iterate
+   *  through all the Note.guids and fetch the Evernote.Note data. We then iterate over the tagGuids and grab Tag data for
+   *  each tagGuid the Note has.   We create a new Note object and return it in a promise
+   *
+   *
+   * @param   {String}   authToken         Developer authToken
+   * @param   {Boolean}  isUsingSanbox  'true' will use the development sandbox, 'false' will use the production environment.
+   * @param   {Evernote.NoteFilter}   filter  The fiter object containing details of the search.  This is how to get a Notebook and it's data
+   * @param   {Int}   offset            When making multiple queries and using pagination, this is the index of results to start from
+   * @param   {Int}   maxNotesReturned  Maximum number of results to return
+   * @param   {Evernote.NotesMetadataResultSpec}   resultSpec   Configuration object that tells Evernote which resources to return from the server for a query.
+   *
+   * @return  {Promise[Note]}   Returns a Promise that resolves to an array of Notes (not Evernote.Notes)
+   */
+
   _getNotesInNotebook: function (authToken, isUsingSanbox, filter, offset, maxNotesReturned, resultSpec) {
+    log.debug(`in _getNotesInNotebook `)
     var self = this
-    var startingOffset = offset || 0
-    var maxNotes = maxNotesReturned || MAX_NOTES_RETURNED
-    var client = new Evernote.Client({token: authToken, sandbox: isUsingSanbox})
-    var noteStore = client.getNoteStore()
-
-    var notes = []
-
     return new Promise(function (resolve, reject) {
-      noteStore.findNotesMetadata(filter, startingOffset, maxNotes, resultSpec, function (err, notesMeta) {
-        if (err) { reject(err) }
+      var startingOffset = offset || 0
+      var maxNotes = maxNotesReturned || MAX_NOTES_RETURNED
+      var client = new Evernote.Client({token: authToken, sandbox: isUsingSanbox})
+      var noteStore = client.getNoteStore()
+      var myNotes = []
 
-        // log.debug(`Found ${notesMeta.notes.length}`)
-        notesMeta.notes.map(evernote => {
+      noteStore.findNotesMetadata(filter, startingOffset, maxNotes, resultSpec, function (err, notesMeta) {
+        log.debug(typeof myNotes)
+        if (err) {
+          log.error(`err is defined as: ${err}`)
+        //   reject(err)
+        }
+        if (err) {
+          log.error('err !== null')
+        }
+        if (typeof notesMeta === 'undefined' || notesMeta === null) {
+          log.error(`notesMeta not defined or null`)
+          reject(`notesMeta not defined or null`)
+        }
+        var noteList = []
+        noteList = notesMeta.notes
+        for (var evernote of noteList) {
           var note = {}
           note.title = evernote.title
-          noteStore.getNote(authToken, evernote.guid, true, true, true, true, function (err, noteData) {
-            if (err) reject(err)
-            note = self._createNoteFromEvernote(noteData)
-
-          	// Fetch tag names by mapping over tagGuids array
-            noteData.tagGuids.map(tagGuid => {
-              noteStore.getTag(authToken, tagGuid, function (err, evernoteTag) {
-                if (err) { log.error(`ERROR getting tags for note ${note.title}`) }
-                note.tags.append(evernoteTag)
-              })// getTag
-            })// tagGuid.map()
-          })// getNote()
-          // add new Note object to notes array
-          notes.append(note)
-        })// notes.map()
-        resolve(notes)
-      })// notStore.findNotes
+          self._getNote(authToken, evernote.guid, noteStore)
+          .then(myNotes.push)
+          // noteStore.getNote(authToken, evernote.guid, true, true, true, true, function (err, noteData) {
+            // Do I want to reject if a note isn't found?  Probably not, just send error message
+        }// for
+      })// findNotesMetadata
     })// promise
   }, // _getNotesInNotebook()
 
-  _createNoteFromEvernote (noteData) {
+  _getNote: function (authToken, guid, noteStore) {
+    var self = this
+    return new Promise(function (resolve, reject) {
+      noteStore.getNote(authToken, guid, true, true, true, true, function (err, noteData) {
+        if (err) reject(err)
+        if (noteData === 'undefined' || noteData === null) log.error(`Note data empty or null.. Continuing`)
+        log.debug(`noteData: ${JSON.stringify(noteData)}`)
+        var note = self._createNoteFromEvernote(self.noteData)
+        log.debug(`\tnote title: ${note.title}`)
+
+        // Fetch tag names by mapping over tagGuids array
+        noteData.tagGuids.map(tagGuid => {
+          self._getTag(self.authToken, tagGuid, self.noteStore).then(note.tags.push)
+        })// map
+        resolve(note)
+      })// noteStore.getNote()
+    })// Promise
+  }, // _getNote()
+
+  _getTag: function (authToken, guid, theNoteStore) {
+    var self = this
+    log.debug(`theNoteStore: ${theNoteStore}`)
+    return new Promise(function (resolve, reject) {
+      log.debug(`theNoteStore: ${theNoteStore}`)
+      log.debug(`self.theNoteStore: ${self.theNoteStore}`)
+      self.theNoteStore.getTag(self.authToken, self.tagGuid, function (err, evernoteTag) {
+        if (err) reject(err)
+        resolve(evernoteTag)
+      })// getTag
+    })// promise
+  }, // _getTag()
+
+  _createNoteFromEvernote: function (noteData) {
     var note = {}
     note.content = {}
     note.content.plaintText = enml.PlainTextOfENML(noteData.content)
@@ -115,9 +167,12 @@ module.exports = {
     note.tagGiuds = noteData.tagGuids
     note.resources = noteData.resources
     note.attirbutes = noteData.attirbutes
-    note.tags = [] // noteData.tagNames// don't think we should bother with this field
     note.sharedWith = noteData.sharedNotes
     note.restrictions = noteData.restrictions
+
+    // noteData.tagNames// don't think I will bother with this field
+    note.tags = []
+    return note
   },
 
   _createNotesFilter: function (notebookGuid, queryString, tagGuidList) {
