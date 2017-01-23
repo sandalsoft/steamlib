@@ -50,14 +50,11 @@ module.exports = {
 
         self._getNotesInNotebook(authToken, isUsingSanbox, filter, 0, null, resultSpec)
         .then(notes => {
-          log.info(`there are ${notes.count} notes I've found!`)
+          notebook = self._createNotebookFromEvernotebook(defaultNotebook)
           notebook.notes = notes
           resolve(notebook)
         })
-        .catch(err => {
-          log.error(`err caught in _getNotesInNotesbook:  ${err}`)
-          reject(err)
-        })
+        .catch(err => reject(err))
       })// noteStore.listNotebooks()
     }) // promise
   }, // getDefaultNotebook()
@@ -144,6 +141,27 @@ module.exports = {
       })// getTag
     })// promise
   }, // _getTag()
+
+  _createNotebookFromEvernotebook: function (evernotebook) {
+    var notebook = {}
+    notebook.guid = evernotebook.guid
+    notebook.name = evernotebook.name
+    notebook.updateSequenceNum = evernotebook.updateSequenceNum
+    notebook.isDefaultNotebook = evernotebook.isDefaultNotebook
+    notebook.serviceCreatedAt = evernotebook.serviceCreatedAt
+    notebook.servieUpdatedAt = evernotebook.servieUpdatedAt
+    notebook.publishing = evernotebook.publishing
+    notebook.isPublished = evernotebook.isPublished
+    notebook.stack = evernotebook.stack
+    notebook.sharedNotebookIds = evernotebook.sharedNotebookIds
+    notebook.sharedNotebooks = evernotebook.sharedNotebooks
+    notebook.businessNotebook = evernotebook.businessNotebook
+    notebook.contactUser = evernotebook.contactUser
+    notebook.restrictions = evernotebook.restrictions
+    notebook.recipientSettings = evernotebook.recipientSettings
+    notebook.notes = []
+    return notebook
+  },
 
   _createNoteFromEvernote: function (noteData) {
     var note = {}
