@@ -20,7 +20,7 @@ module.exports = {
     var noteStore = client.getNoteStore()
     return new Promise(function (resolve, reject) {
       noteStore.listNotebooks(function (err, notebooks) {
-        if (err) { reject(err) }
+        if (err) reject(err)
         resolve(notebooks)
       })// noteStore.listNotebooks()
     }) // promise
@@ -55,7 +55,7 @@ module.exports = {
           resolve(notebook)
         })
         .catch(err => {
-          log.debug(`err caught in _getNotesInNotesbook:  ${err}`)
+          log.error(`err caught in _getNotesInNotesbook:  ${err}`)
           reject(err)
         })
       })// noteStore.listNotebooks()
@@ -88,25 +88,46 @@ module.exports = {
       var maxNotes = maxNotesReturned || MAX_NOTES_RETURNED
       var client = new Evernote.Client({token: authToken, sandbox: isUsingSanbox})
       var noteStore = client.getNoteStore()
-      var myNotes = []
 
       noteStore.findNotesMetadata(filter, startingOffset, maxNotes, resultSpec, function (err, notesMeta) {
-        log.debug(typeof myNotes)
         if (err) reject(err)
         if (typeof notesMeta === 'undefined' || notesMeta === null) reject(`notesMeta not defined or null`)
 
-        log.debug(`notesMeta: ${JSON.stringify(notesMeta)}`)
-        notesMeta.notes.map(evernote => {
-          var note = {}
-          note.title = evernote.title
-          self._getNote(authToken, evernote.guid, noteStore)
-          .then(note => myNotes.push(note))
-        })// map
-        log.debug(`myNotes: ${myNotes}`)
-        resolve(myNotes)
+        // self._getNotesFromMeta(authToken, noteStore, notesMeta).then(notes => resolve(notes))
+        var myNotesPromises = self._getNotesFromMeta(authToken, noteStore, notesMeta)
+        Promise.all(myNotesPromises)
+        .then(myNotes => {
+          log.debug(`.all resolving myNotes.length: ${myNotes.length}`)
+          resolve(myNotes)
+        })
+        .catch(err => {
+          log.error(`rejecting shit like Kareem: ${err}`)
+          reject(err)
+        })
       })// findNotesMetadata
+      // log.debug(`resolving myNotes: ${myNotes}`)
+      // resolve(myNotes)
     })// promise
   }, // _getNotesInNotebook()
+
+  _getNotesFromMeta: function (authToken, noteStore, notesMeta) {
+    var self = this
+    return new Promise(function (resolve, reject) {
+      var myNotesPromises = []
+      notesMeta.notes.map(evernote => {
+        var getNotePromise = new Promise(function (resolve, reject) {
+          self._getNote(authToken, evernote.guid, noteStore).then(note => {
+            log.debug(`getNote() resolving note.title: ${note.title}`)
+            resolve(note)
+          })// _getNotes
+        })// promise
+        log.info(`pushing promise onto array`)
+        myNotesPromises.push(getNotePromise)
+      })// map
+      log.info(`returning from promises`)
+      resolve(myNotesPromises)
+    })// promise
+  },
 
   _getNote: function (authToken, guid, noteStore) {
     var self = this
