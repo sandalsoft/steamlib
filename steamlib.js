@@ -28,7 +28,6 @@ module.exports = {
           notebooksPromises.push(self.getNotebook(authToken, isUsingSandbox, evernotebook.guid))
         })
         Promise.all(notebooksPromises).then(allNotebooks => {
-          log.debug(`allNotebooks: ${allNotebooks}`)
           resolve(allNotebooks)
         })
         .catch(err => reject(err))
@@ -152,12 +151,13 @@ module.exports = {
 
         var note = self._createNoteFromEvernote(noteData)
 
+        var tagList = []
         // If note has tags, fetch tag names by mapping over tagGuids array
         if (noteData.tagGuids) {
           noteData.tagGuids.map(tagGuid => {
             self._getTag(authToken, tagGuid, noteStore).then(tag => {
               log.debug(`note: ${note.title} -> tag: ${tag.name}`)
-              note.tags.push(tag)
+              tagList.push(tag)
             })// then
           })// map
         }// if tagGuids
