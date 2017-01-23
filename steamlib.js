@@ -93,38 +93,22 @@ module.exports = {
         if (err) reject(err)
         if (typeof notesMeta === 'undefined' || notesMeta === null) reject(`notesMeta not defined or null`)
 
-        // self._getNotesFromMeta(authToken, noteStore, notesMeta).then(notes => resolve(notes))
-        var myNotesPromises = self._getNotesFromMeta(authToken, noteStore, notesMeta)
-        Promise.all(myNotesPromises)
-        .then(myNotes => {
-          log.debug(`.all resolving myNotes.length: ${myNotes.length}`)
-          resolve(myNotes)
+        self._getAllNotes(authToken, noteStore, notesMeta)
+        .then(notesPromises => {
+          Promise.all(notesPromises).then(allNotes => resolve(allNotes))
         })
-        .catch(err => {
-          log.error(`rejecting shit like Kareem: ${err}`)
-          reject(err)
-        })
+        .catch(err => reject(err))
       })// findNotesMetadata
-      // log.debug(`resolving myNotes: ${myNotes}`)
-      // resolve(myNotes)
     })// promise
   }, // _getNotesInNotebook()
 
-  _getNotesFromMeta: function (authToken, noteStore, notesMeta) {
+  _getAllNotes: function (authToken, noteStore, notesMeta) {
     var self = this
     return new Promise(function (resolve, reject) {
       var myNotesPromises = []
       notesMeta.notes.map(evernote => {
-        var getNotePromise = new Promise(function (resolve, reject) {
-          self._getNote(authToken, evernote.guid, noteStore).then(note => {
-            log.debug(`getNote() resolving note.title: ${note.title}`)
-            resolve(note)
-          })// _getNotes
-        })// promise
-        log.info(`pushing promise onto array`)
-        myNotesPromises.push(getNotePromise)
+        myNotesPromises.push(self._getNote(authToken, evernote.guid, noteStore))
       })// map
-      log.info(`returning from promises`)
       resolve(myNotesPromises)
     })// promise
   },
@@ -135,14 +119,14 @@ module.exports = {
       noteStore.getNote(authToken, guid, true, true, true, true, function (err, noteData) {
         if (err) reject(err)
         if (noteData === 'undefined' || noteData === null) log.error(`Note data empty or null.. Continuing`) // reject(`Note data empty or null`)
-        // log.debug(`noteData: ${JSON.stringify(noteData)}`)
+
         var note = self._createNoteFromEvernote(noteData)
 
         // If note has tags, fetch tag names by mapping over tagGuids array
         if (noteData.tagGuids) {
           noteData.tagGuids.map(tagGuid => {
             self._getTag(authToken, tagGuid, noteStore).then(tag => {
-              log.debug(`tag: ${tag.name}`)
+              log.debug(`note: ${note.title} -> tag: ${tag.name}`)
               note.tags.push(tag)
             })// then
           })// map
@@ -152,9 +136,9 @@ module.exports = {
     })// Promise
   }, // _getNote()
 
-  _getTag: function (authToken, tagGuid, theNoteStore) {
+  _getTag: function (authToken, tagGuid, noteStore) {
     return new Promise(function (resolve, reject) {
-      theNoteStore.getTag(authToken, tagGuid, function (err, evernoteTag) {
+      noteStore.getTag(authToken, tagGuid, function (err, evernoteTag) {
         if (err) reject(err)
         resolve(evernoteTag)
       })// getTag
