@@ -11,6 +11,16 @@ var authToken = process.env['EVERNOTE_DEV_TOKEN']
 
 steamlib.getAllNotebooks(authToken, true)
 .then(notebooks => {
-  console.log(`\n\t\tnotebooks: ${notebooks}`)
+  notebooks.map(notebook => {
+    console.log(`${notebook.name}`)
+    notebook.notes.map(note => {
+      console.log(`\t${note.title}`);
+      note.tags.map(tag => {
+        console.log(`\t\t${tag.name}`);
+      })
+    })
+    
+  })
+  
 })
 .catch(err => console.log(`REJECTED ERROR: ${err}`))

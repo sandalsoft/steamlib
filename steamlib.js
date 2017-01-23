@@ -124,7 +124,14 @@ module.exports = {
 
         self._getAllNotes(authToken, noteStore, notesMeta)
         .then(notesPromises => {
-          Promise.all(notesPromises).then(allNotes => resolve(allNotes))
+          Promise.all(notesPromises).then(allNotes => {
+            allNotes.map(note => {
+              // log.info(`||note.tags:  ${JSON.stringify(note)}`)
+            })
+            resolve(allNotes)
+          })
+
+          // }
         })
         .catch(err => reject(err))
       })// findNotesMetadata
@@ -150,18 +157,19 @@ module.exports = {
         if (noteData === 'undefined' || noteData === null) log.error(`Note data empty or null.. Continuing`) // reject(`Note data empty or null`)
 
         var note = self._createNoteFromEvernote(noteData)
-
-        var tagList = []
+        var tagsPromises = []
         // If note has tags, fetch tag names by mapping over tagGuids array
         if (noteData.tagGuids) {
           noteData.tagGuids.map(tagGuid => {
-            self._getTag(authToken, tagGuid, noteStore).then(tag => {
-              log.debug(`note: ${note.title} -> tag: ${tag.name}`)
-              tagList.push(tag)
-            })// then
+            tagsPromises.push(self._getTag(authToken, tagGuid, noteStore))
           })// map
-        }// if tagGuids
-        resolve(note)
+          Promise.all(tagsPromises).then(tags => {
+            note.tags = note.tags.concat(tags)
+            resolve(note)
+          })
+        } else { // if tagGuids
+          resolve(note)
+        }
       })// noteStore.getNote()
     })// Promise
   }, // _getNote()
