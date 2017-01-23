@@ -1,0 +1,39 @@
+
+  {
+    "guid": "9ee5e7a6-2097-4cbf-821b-f4307974855e",
+    "name": "SE Notes",
+    "updateSequenceNum": 19,
+    "defaultNotebook": true,
+    "serviceCreated": 1483767493000,
+    "serviceUpdated": 1485054096000,
+    "publishing": null,
+    "published": null,
+    "stack": null,
+    "sharedNotebookIds": null,
+    "sharedNotebooks": null,
+    "businessNotebook": null,
+    "contact": null,
+    "restrictions": {
+      "noReadNotes": null,
+      "noCreateNotes": null,
+      "noUpdateNotes": null,
+      "noExpungeNotes": null,
+      "noShareNotes": null,
+      "noEmailNotes": true,
+      "noSendMessageToRecipients": null,
+      "noUpdateNotebook": null,
+      "noExpungeNotebook": null,
+      "noSetDefaultNotebook": null,
+      "noSetNotebookStack": null,
+      "noPublishToPublic": true,
+      "noPublishToBusinessLibrary": true,
+      "noCreateTags": null,
+      "noUpdateTags": null,
+      "noExpungeTags": null,
+      "noSetParentTag": null,
+      "noCreateSharedNotebooks": null,
+      "updateWhichSharedNotebookRestrictions": null,
+      "expungeWhichSharedNotebookRestrictions": null
+    }
+  }
+  

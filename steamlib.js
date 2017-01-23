@@ -11,32 +11,64 @@ module.exports = {
    * Returns Promise that resolves to an array of all Notebook in the account
    *
    * @param   {String}   authToken          Developer authToken
-   * @param   {Boolean}  isUsingSanbox  'true' will use the development sandbox, 'false' will use the production environment.
+   * @param   {Boolean}  isUsingSandbox  'true' will use the development sandbox, 'false' will use the production environment.
    *
    * @return  {Promise[Array]}          Promise that resolves to an array containing all notebooks for the account
    */
-  getAllNotebooks: function (authToken, isUsingSanbox) {
-    var client = new Evernote.Client({token: authToken, sandbox: isUsingSanbox})
+  getAllNotebooks: function (authToken, isUsingSandbox) {
+    var self = this
+    var client = new Evernote.Client({token: authToken, sandbox: isUsingSandbox})
     var noteStore = client.getNoteStore()
     return new Promise(function (resolve, reject) {
       noteStore.listNotebooks(function (err, notebooks) {
         if (err) reject(err)
-        resolve(notebooks)
+
+        var notebooksPromises = []
+        notebooks.map(evernotebook => {
+          notebooksPromises.push(self.getNotebook(authToken, isUsingSandbox, evernotebook.guid))
+        })
+        Promise.all(notebooksPromises).then(allNotebooks => {
+          log.debug(`allNotebooks: ${allNotebooks}`)
+          resolve(allNotebooks)
+        })
+        .catch(err => reject(err))
       })// noteStore.listNotebooks()
     }) // promise
   }, // getAllNotebook()
+
+  getNotebook: function (authToken, isUsingSandbox, notebookGuid) {
+    var self = this
+    var client = new Evernote.Client({token: authToken, sandbox: isUsingSandbox})
+    var noteStore = client.getNoteStore()
+    return new Promise(function (resolve, reject) {
+      noteStore.getNotebook(authToken, notebookGuid, function (err, evernotebook) {
+        if (err) reject(err)
+
+        var filter = self._createNotesFilter(notebookGuid, null, null)
+        var resultSpec = self._createResultSpec()
+
+        self._getNotesInNotebook(authToken, isUsingSandbox, filter, 0, null, resultSpec)
+        .then(notes => {
+          var notebook = self._createNotebookFromEvernotebook(evernotebook)
+          notebook.notes = notes
+          resolve(notebook)
+        })
+        .catch(err => reject(err))
+      })// noteStore.getNotebook()
+    })// Promise
+  }, // getNotebook()
 
   /**
    * getDefaultNotebook Returns promise that resolves to the default Notebook
    *
    * @param   {String}   authToken          Developer authToken
-   * @param   {Boolean}  isUsingSanbox  'true' will use the development sandbox, 'false' will use the production environment.
+   * @param   {Boolean}  isUsingSandbox  'true' will use the development sandbox, 'false' will use the production environment.
    *
    * @return  {Promise[Notebook]}       Promise that resolves to the default Notebook object https://dev.evernote.com/doc/reference/Types.html#Struct_Notebook.
    */
-  getDefaultNotebook: function (authToken, isUsingSanbox) {
+  getDefaultNotebook: function (authToken, isUsingSandbox) {
     var self = this
-    var client = new Evernote.Client({token: authToken, sandbox: isUsingSanbox})
+    var client = new Evernote.Client({token: authToken, sandbox: isUsingSandbox})
     var noteStore = client.getNoteStore()
     return new Promise(function (resolve, reject) {
       noteStore.getDefaultNotebook(function (err, defaultNotebook) {
@@ -48,7 +80,7 @@ module.exports = {
         var filter = self._createNotesFilter(defaultNotebook.guid, null, null)
         var resultSpec = self._createResultSpec()
 
-        self._getNotesInNotebook(authToken, isUsingSanbox, filter, 0, null, resultSpec)
+        self._getNotesInNotebook(authToken, isUsingSandbox, filter, 0, null, resultSpec)
         .then(notes => {
           notebook = self._createNotebookFromEvernotebook(defaultNotebook)
           notebook.notes = notes
@@ -69,7 +101,7 @@ module.exports = {
    *
    *
    * @param   {String}   authToken         Developer authToken
-   * @param   {Boolean}  isUsingSanbox  'true' will use the development sandbox, 'false' will use the production environment.
+   * @param   {Boolean}  isUsingSandbox  'true' will use the development sandbox, 'false' will use the production environment.
    * @param   {Evernote.NoteFilter}   filter  The fiter object containing details of the search.  This is how to get a Notebook and it's data
    * @param   {Int}   offset            When making multiple queries and using pagination, this is the index of results to start from
    * @param   {Int}   maxNotesReturned  Maximum number of results to return
@@ -78,13 +110,14 @@ module.exports = {
    * @return  {Promise[Note]}   Returns a Promise that resolves to an array of Notes (not Evernote.Notes)
    */
 
-  _getNotesInNotebook: function (authToken, isUsingSanbox, filter, offset, maxNotesReturned, resultSpec) {
+  _getNotesInNotebook: function (authToken, isUsingSandbox, filter, offset, maxNotesReturned, spec) {
     var self = this
     return new Promise(function (resolve, reject) {
       var startingOffset = offset || 0
       var maxNotes = maxNotesReturned || MAX_NOTES_RETURNED
-      var client = new Evernote.Client({token: authToken, sandbox: isUsingSanbox})
+      var client = new Evernote.Client({token: authToken, sandbox: isUsingSandbox})
       var noteStore = client.getNoteStore()
+      var resultSpec = spec || self._createResultSpec()
 
       noteStore.findNotesMetadata(filter, startingOffset, maxNotes, resultSpec, function (err, notesMeta) {
         if (err) reject(err)
@@ -147,16 +180,16 @@ module.exports = {
     notebook.guid = evernotebook.guid
     notebook.name = evernotebook.name
     notebook.updateSequenceNum = evernotebook.updateSequenceNum
-    notebook.isDefaultNotebook = evernotebook.isDefaultNotebook
-    notebook.serviceCreatedAt = evernotebook.serviceCreatedAt
-    notebook.servieUpdatedAt = evernotebook.servieUpdatedAt
+    notebook.isDefaultNotebook = evernotebook.defaultNotebook
+    notebook.serviceCreatedAt = evernotebook.serviceCreated
+    notebook.servieUpdatedAt = evernotebook.servieUpdated
     notebook.publishing = evernotebook.publishing
-    notebook.isPublished = evernotebook.isPublished
+    notebook.isPublished = evernotebook.published
     notebook.stack = evernotebook.stack
     notebook.sharedNotebookIds = evernotebook.sharedNotebookIds
     notebook.sharedNotebooks = evernotebook.sharedNotebooks
     notebook.businessNotebook = evernotebook.businessNotebook
-    notebook.contactUser = evernotebook.contactUser
+    notebook.contactUser = evernotebook.contact
     notebook.restrictions = evernotebook.restrictions
     notebook.recipientSettings = evernotebook.recipientSettings
     notebook.notes = []
